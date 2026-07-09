@@ -14,12 +14,16 @@ SRC_FILES := \
 	ui/wm/src/window_manager.cpp \
 	ui/bckg/src/background.cpp \
 	ui/cursor/src/cursor.cpp \
+	ui/tabs/src/w-tab.cpp \
+	controls/rc/src/tabs/rc1.cpp \
 	session/src/session_manager.cpp
 
 INCLUDE_DIRS := \
 	ui/wm/include \
 	ui/bckg/include \
 	ui/cursor/include \
+	ui/tabs/include \
+	controls/rc/include \
 	session/include
 
 CPPFLAGS += $(foreach dir,$(INCLUDE_DIRS),-I$(ROOT_DIR)/$(dir))

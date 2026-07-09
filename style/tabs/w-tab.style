@@ -1,0 +1,9 @@
+/* Style definitions -rc */
+background: rgba(0, 0, 0, 0.55);
+border-color: rgba(255, 255, 255, 0.6);
+border-width: 1px;
+text-color: rgba(255, 255, 255, 0.95);
+item-height: 32px;
+item-spacing: 10px;
+padding: 14px;
+font-family: sans-serif;

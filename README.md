@@ -29,6 +29,8 @@ Project layout
 - `ui/wm/` — Window manager: `include` and `src` (main, event loop)
 - `ui/bckg/` — Background renderer (Imlib2)
 - `ui/cursor/` — Software cursor overlay renderer
+- `style/cursor/` — Cursor style definitions
+- `ui/tabs/` — Right-click desktop menu implementation
 - `images/` — Default wallpaper: `images/logo/main/main.png`
 - `script/run.sh` — Helper to run under Xephyr
 
@@ -72,6 +74,7 @@ Example `c_cpp_properties.json` entry (Linux):
 Next steps
 ----------
 - `make` then run `./script/run.sh` in Xephyr to test the desktop and cursor.
+- See `docs/ui-interaction.md` for the new right-click menu and cursor style details.
 - Tell me if you want more detailed module-level READMEs or Doxygen-style
   comments added to specific files.
 
@@ -81,4 +84,4 @@ The Session Manager orchestrates Turtle's runtime services (Window Manager,
 Background Manager, etc.). See the developer documentation for details:
 
 - [Session Manager design and usage](docs/session-manager.md)
-# turtle
+- [UI interaction and cursor style](docs/ui-interaction.md)

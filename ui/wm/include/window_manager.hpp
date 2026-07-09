@@ -1,11 +1,14 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 #include <X11/Xlib.h>
 
 #include "background.hpp"
 #include "cursor.hpp"
+
+namespace turtle { namespace rc { class RightClickController; } }
 
 /*
  * WindowManager
@@ -52,6 +55,7 @@ private:
     bool running_;
     bckg::BackgroundRenderer background_;
     cursor::CursorRenderer cursor_;
+    std::unique_ptr<turtle::rc::RightClickController> rc_controller_;
     Pixmap background_pixmap_;
     int prev_cursor_x_;
     int prev_cursor_y_;

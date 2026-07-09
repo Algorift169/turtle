@@ -5,6 +5,7 @@
 
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
+#include "../../../controls/rc/include/rc1.hpp"
 
 namespace turtle {
 namespace wm {
@@ -63,12 +64,14 @@ bool WindowManager::initialize() {
     }
 
     if (!cursor_.initialize(display_, desktop_window_)) {
-            // Initialize the cursor renderer (software overlay only). The renderer
-            // intentionally does not hide or modify the system cursor.
+        // Initialize the cursor renderer (software overlay only). The renderer
+        // intentionally does not hide or modify the system cursor.
         std::cerr << "WindowManager: failed to install the custom cursor." << std::endl;
         cleanup();
         return false;
     }
+
+    rc_controller_ = std::make_unique<turtle::rc::RightClickController>();
 
     const std::string wallpaper_path = bckg::find_default_wallpaper_path();
     if (!background_.load_from_file(wallpaper_path)) {
@@ -149,8 +152,18 @@ bool WindowManager::create_desktop_window() {
 }
 
 void WindowManager::render_frame() {
-    XClearWindow(display_, desktop_window_);
-    background_.render_to_window(display_, desktop_window_, width_, height_);
+    if (background_pixmap_ready_) {
+        GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
+        XCopyArea(display_, background_pixmap_, desktop_window_, gc,
+                  0, 0, width_, height_, 0, 0);
+        XFreeGC(display_, gc);
+    } else {
+        background_.render_to_window(display_, desktop_window_, width_, height_);
+    }
+
+    if (rc_controller_ && rc_controller_->is_open()) {
+        rc_controller_->draw(display_, desktop_window_);
+    }
     cursor_.draw_overlay();
     XFlush(display_);
 }
@@ -211,6 +224,9 @@ void WindowManager::handle_event(const XEvent& event) {
                 XFreeGC(display_, gc);
             }
             cursor_.set_position(nx, ny);
+            if (rc_controller_ && rc_controller_->is_open()) {
+                rc_controller_->draw(display_, desktop_window_);
+            }
             cursor_.draw_overlay();
             XFlush(display_);
             prev_cursor_x_ = nx;
@@ -219,6 +235,20 @@ void WindowManager::handle_event(const XEvent& event) {
         }
 
         case ButtonPress: {
+            if (event.xbutton.button == Button3) {
+                if (rc_controller_) {
+                    rc_controller_->on_right_click(event.xbutton.x, event.xbutton.y);
+                }
+                render_frame();
+                break;
+            }
+
+            if (rc_controller_ && rc_controller_->is_open()) {
+                rc_controller_->on_click(event.xbutton.x, event.xbutton.y);
+                render_frame();
+                break;
+            }
+
             // Restore previous cursor region before drawing click indicator
             if (background_pixmap_ready_) {
                 GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
@@ -228,8 +258,6 @@ void WindowManager::handle_event(const XEvent& event) {
             }
             if (event.xbutton.button == Button1) {
                 cursor_.set_state(cursor::CursorState::LeftClick);
-            } else if (event.xbutton.button == Button3) {
-                cursor_.set_state(cursor::CursorState::RightClick);
             } else if (event.xbutton.button == Button4) {
                 cursor_.set_state(cursor::CursorState::ScrollUp);
             } else if (event.xbutton.button == Button5) {

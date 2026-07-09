@@ -1,0 +1,13 @@
+# Turtle cursor style
+
+# Base pointer color
+pointer-color: #ffffff
+# Shadow / accent color for click indicators
+indicator-color: #88c0d0
+# Thickness of the cursor outline
+outline-thickness: 2
+# Cursor shape size
+pointer-width: 12
+pointer-height: 20
+# Click indicator box size
+click-indicator-size: 5
