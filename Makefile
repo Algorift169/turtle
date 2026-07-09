@@ -13,12 +13,14 @@ SRC_FILES := \
 	ui/wm/src/main.cpp \
 	ui/wm/src/window_manager.cpp \
 	ui/bckg/src/background.cpp \
-	ui/cursor/src/cursor.cpp
+	ui/cursor/src/cursor.cpp \
+	session/src/session_manager.cpp
 
 INCLUDE_DIRS := \
 	ui/wm/include \
 	ui/bckg/include \
-	ui/cursor/include
+	ui/cursor/include \
+	session/include
 
 CPPFLAGS += $(foreach dir,$(INCLUDE_DIRS),-I$(ROOT_DIR)/$(dir))
 CPPFLAGS += $(shell pkg-config --cflags x11 imlib2)

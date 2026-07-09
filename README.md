@@ -49,6 +49,7 @@ If your editor flags missing headers, add these include paths in
 - `${workspaceFolder}/ui/wm/include`
 - `${workspaceFolder}/ui/bckg/include`
 - `${workspaceFolder}/ui/cursor/include`
+ - `${workspaceFolder}/session/include`
 
 Example `c_cpp_properties.json` entry (Linux):
 
@@ -73,4 +74,11 @@ Next steps
 - `make` then run `./script/run.sh` in Xephyr to test the desktop and cursor.
 - Tell me if you want more detailed module-level READMEs or Doxygen-style
   comments added to specific files.
+
+Session Manager
+---------------
+The Session Manager orchestrates Turtle's runtime services (Window Manager,
+Background Manager, etc.). See the developer documentation for details:
+
+- [Session Manager design and usage](docs/session-manager.md)
 # turtle

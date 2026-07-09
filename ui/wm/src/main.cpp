@@ -1,14 +1,14 @@
-#include "../include/window_manager.hpp"
+#include "../../session/include/session_manager.hpp"
 
 #include <iostream>
 
 int main() {
-    turtle::wm::WindowManager window_manager;
+    turtle::session::SessionManager session;
 
-    if (!window_manager.initialize()) {
-        std::cerr << "Main: failed to initialize the Turtle window manager." << std::endl;
+    if (!session.initialize()) {
+        std::cerr << "Main: failed to initialize the Turtle session." << std::endl;
         return 1;
     }
 
-    return window_manager.run();
+    return session.run();
 }
