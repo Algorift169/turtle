@@ -2,7 +2,11 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <Imlib2.h>
 #include <cstring>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -31,6 +35,25 @@ void draw_rounded_rectangle(Display* display, Window window, GC gc,
     XDrawRectangle(display, window, gc, x, y + radius, width, height - diameter);
 }
 
+void draw_icon(Display* display, Window window, const std::string& icon_path, int x, int y, int size) {
+    if (!std::filesystem::exists(icon_path)) {
+        return;
+    }
+
+    Imlib_Image image = imlib_load_image(icon_path.c_str());
+    if (!image) {
+        return;
+    }
+
+    imlib_context_set_display(display);
+    imlib_context_set_visual(DefaultVisual(display, DefaultScreen(display)));
+    imlib_context_set_colormap(DefaultColormap(display, DefaultScreen(display)));
+    imlib_context_set_drawable(window);
+    imlib_context_set_image(image);
+    imlib_render_image_on_drawable_at_size(x, y, size, size);
+    imlib_free_image();
+}
+
 }  // namespace
 
 namespace turtle {
@@ -43,22 +66,23 @@ RightClickTab::RightClickTab()
 
 void RightClickTab::build_items() {
     items_.clear();
-    const std::vector<std::string> labels = {
-        "Create Launcher",
-        "Terminal",
-        "Refresh",
-        "Display Settings",
-        "Applications",
-        "Create Folder",
-        "Create Document"
+    const std::vector<std::pair<std::string, std::string>> entries = {
+        //{"Create Launcher", "images/icons/other.svg"}, TODO
+        {"Create Folder", "images/icons/folder.svg"},
+        {"Create Document", "images/icons/text-editor.png"},
+        {"Terminal", "images/icons/terminal.svg"},
+        {"Refresh", "images/icons/refresh.png"},
+        {"Display Settings", "images/icons/desktop.svg"},
+        {"Applications", "images/icons/applications.svg"},
+        {"Settings","images/icons/settings.svg"},
     };
 
     const int item_height = 22;
     const int padding = 12;
     const int vertical_spacing = 6;
     int item_y = padding;
-    for (const auto& label : labels) {
-        items_.push_back(MenuItem{label, padding, item_y, width_ - padding * 2, item_height});
+    for (const auto& entry : entries) {
+        items_.push_back(MenuItem{entry.first, entry.second, padding, item_y, width_ - padding * 2, item_height});
         item_y += item_height + vertical_spacing;
     }
     height_ = item_y + padding - vertical_spacing;
@@ -139,7 +163,12 @@ void RightClickTab::draw(Display* display, Window window) const {
 
     XSetForeground(display, gc, text_color);
     for (const auto& item : items_) {
-        const int text_x = x_ + item.x + 10;
+        const int icon_x = x_ + item.x + 6;
+        const int icon_y = y_ + item.y + 2;
+        const int icon_size = 16;
+        draw_icon(display, window, item.icon_path, icon_x, icon_y, icon_size);
+
+        const int text_x = x_ + item.x + 28;
         const int text_y = y_ + item.y + item.height - 8;
         XDrawString(display, window, gc, text_x, text_y,
                     item.label.c_str(), static_cast<int>(item.label.size()));

@@ -57,11 +57,13 @@ private:
     cursor::CursorRenderer cursor_;
     std::unique_ptr<turtle::rc::RightClickController> rc_controller_;
     Pixmap background_pixmap_;
+    Pixmap frame_pixmap_;
     int prev_cursor_x_;
     int prev_cursor_y_;
     int cursor_w_;
     int cursor_h_;
     bool background_pixmap_ready_;
+    bool frame_pixmap_ready_;
 };
 
 }  // namespace wm

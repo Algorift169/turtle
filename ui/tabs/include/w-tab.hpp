@@ -9,6 +9,7 @@ namespace tabs {
 
 struct MenuItem {
     std::string label;
+    std::string icon_path;
     int x;
     int y;
     int width;

@@ -37,7 +37,8 @@ void set_window_title(Display* display, Window window, const std::string& title)
 
 WindowManager::WindowManager()
         : display_(nullptr), screen_(0), root_window_(0), desktop_window_(0), width_(0), height_(0), running_(false),
-            background_pixmap_(0), prev_cursor_x_(0), prev_cursor_y_(0), cursor_w_(24), cursor_h_(24), background_pixmap_ready_(false) {}
+            background_pixmap_(0), frame_pixmap_(0), prev_cursor_x_(0), prev_cursor_y_(0), cursor_w_(24), cursor_h_(24),
+            background_pixmap_ready_(false), frame_pixmap_ready_(false) {}
             // Construct an empty WindowManager. Resources are acquired in `initialize()`.
 
 WindowManager::~WindowManager() {
@@ -92,14 +93,18 @@ bool WindowManager::initialize() {
     background_.render_to_window(display_, desktop_window_, width_, height_);
     background_pixmap_ = XCreatePixmap(display_, desktop_window_, width_, height_,
                                        DefaultDepth(display_, screen_));
+    frame_pixmap_ = XCreatePixmap(display_, desktop_window_, width_, height_,
+                                  DefaultDepth(display_, screen_));
     GC tmp_gc = XCreateGC(display_, desktop_window_, 0, nullptr);
     XCopyArea(display_, desktop_window_, background_pixmap_, tmp_gc, 0, 0, width_, height_, 0, 0);
+    XCopyArea(display_, desktop_window_, frame_pixmap_, tmp_gc, 0, 0, width_, height_, 0, 0);
     XFreeGC(display_, tmp_gc);
     prev_cursor_x_ = 0;
     prev_cursor_y_ = 0;
     cursor_w_ = 24;
     cursor_h_ = 24;
     background_pixmap_ready_ = true;
+    frame_pixmap_ready_ = true;
 
     // Draw the software cursor on top of the desktop (not included in the pixmap).
     cursor_.draw_overlay();
@@ -164,6 +169,13 @@ void WindowManager::render_frame() {
     if (rc_controller_ && rc_controller_->is_open()) {
         rc_controller_->draw(display_, desktop_window_);
     }
+
+    if (frame_pixmap_ready_) {
+        GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
+        XCopyArea(display_, desktop_window_, frame_pixmap_, gc, 0, 0, width_, height_, 0, 0);
+        XFreeGC(display_, gc);
+    }
+
     cursor_.draw_overlay();
     XFlush(display_);
 }
@@ -188,12 +200,20 @@ void WindowManager::handle_event(const XEvent& event) {
                 XFreePixmap(display_, background_pixmap_);
                 background_pixmap_ = 0;
             }
+            if (frame_pixmap_ != 0) {
+                XFreePixmap(display_, frame_pixmap_);
+                frame_pixmap_ = 0;
+            }
             background_pixmap_ = XCreatePixmap(display_, desktop_window_, width_, height_,
                                                DefaultDepth(display_, screen_));
+            frame_pixmap_ = XCreatePixmap(display_, desktop_window_, width_, height_,
+                                          DefaultDepth(display_, screen_));
             GC tmp_gc = XCreateGC(display_, desktop_window_, 0, nullptr);
             XCopyArea(display_, desktop_window_, background_pixmap_, tmp_gc, 0, 0, width_, height_, 0, 0);
+            XCopyArea(display_, desktop_window_, frame_pixmap_, tmp_gc, 0, 0, width_, height_, 0, 0);
             XFreeGC(display_, tmp_gc);
             background_pixmap_ready_ = true;
+            frame_pixmap_ready_ = true;
             cursor_.draw_overlay();
             break;
         }
@@ -217,6 +237,23 @@ void WindowManager::handle_event(const XEvent& event) {
         case MotionNotify: {
             int nx = event.xmotion.x;
             int ny = event.xmotion.y;
+
+            if (rc_controller_ && rc_controller_->is_open()) {
+                if (frame_pixmap_ready_) {
+                    GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
+                    XCopyArea(display_, frame_pixmap_, desktop_window_, gc,
+                              prev_cursor_x_, prev_cursor_y_, cursor_w_, cursor_h_, prev_cursor_x_, prev_cursor_y_);
+                    XFreeGC(display_, gc);
+                }
+
+                cursor_.set_position(nx, ny);
+                cursor_.draw_overlay();
+                XFlush(display_);
+                prev_cursor_x_ = nx;
+                prev_cursor_y_ = ny;
+                break;
+            }
+
             if (background_pixmap_ready_) {
                 GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
                 XCopyArea(display_, background_pixmap_, desktop_window_, gc,
@@ -224,9 +261,6 @@ void WindowManager::handle_event(const XEvent& event) {
                 XFreeGC(display_, gc);
             }
             cursor_.set_position(nx, ny);
-            if (rc_controller_ && rc_controller_->is_open()) {
-                rc_controller_->draw(display_, desktop_window_);
-            }
             cursor_.draw_overlay();
             XFlush(display_);
             prev_cursor_x_ = nx;
@@ -298,6 +332,10 @@ void WindowManager::cleanup() {
         if (background_pixmap_ != 0) {
             XFreePixmap(display_, background_pixmap_);
             background_pixmap_ = 0;
+        }
+        if (frame_pixmap_ != 0) {
+            XFreePixmap(display_, frame_pixmap_);
+            frame_pixmap_ = 0;
         }
         XCloseDisplay(display_);
         display_ = nullptr;
