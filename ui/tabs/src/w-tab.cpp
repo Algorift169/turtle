@@ -71,7 +71,7 @@ void RightClickTab::build_items() {
         {"Create Folder", "images/icons/folder.svg"},
         {"Create Document", "images/icons/text-editor.png"},
         {"Terminal", "images/icons/terminal.svg"},
-        {"Refresh", "images/icons/refresh.png"},
+        {"Refresh", "images/icons/refresh.svg"},
         {"Display Settings", "images/icons/desktop.svg"},
         {"Applications", "images/icons/applications.svg"},
         {"Settings","images/icons/settings.svg"},
