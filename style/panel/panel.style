@@ -1,0 +1,12 @@
+# Turtle panel style
+panel-height: 35
+panel-corner-radius: 8
+panel-button-size: 28
+panel-button-spacing: 4
+panel-icon-size: 20
+panel-left-padding: 0
+panel-right-padding: 0
+panel-placeholder-margin: 0
+panel-background: 0xCC000000
+panel-border: 0x33FFFFFF
+panel-text: 0xFFFFFFFF

@@ -7,6 +7,7 @@
 
 #include "background.hpp"
 #include "cursor.hpp"
+#include "panel.hpp"
 
 namespace turtle { namespace rc { class RightClickController; } }
 
@@ -55,6 +56,7 @@ private:
     bool running_;
     bckg::BackgroundRenderer background_;
     cursor::CursorRenderer cursor_;
+    panel::Panel panel_;
     std::unique_ptr<turtle::rc::RightClickController> rc_controller_;
     Pixmap background_pixmap_;
     Pixmap frame_pixmap_;

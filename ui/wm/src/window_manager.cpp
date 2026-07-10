@@ -72,6 +72,12 @@ bool WindowManager::initialize() {
         return false;
     }
 
+    if (!panel_.load_style()) {
+        std::cerr << "WindowManager: failed to load panel style." << std::endl;
+        cleanup();
+        return false;
+    }
+
     rc_controller_ = std::make_unique<turtle::rc::RightClickController>();
 
     const std::string wallpaper_path = bckg::find_default_wallpaper_path();
@@ -87,10 +93,11 @@ bool WindowManager::initialize() {
         // event-driven main loop in `run()`.
     running_ = true;
 
-    // Render only the wallpaper into the desktop window and snapshot it into
-    // a pixmap so the software cursor overlay can later restore small regions
-    // from this snapshot. We avoid including the software cursor in the pixmap.
+    // Render the wallpaper and panel into the desktop window and snapshot it
+    // into a pixmap so the software cursor overlay can later restore small
+    // regions from a panel-aware frame instead of wiping the panel away.
     background_.render_to_window(display_, desktop_window_, width_, height_);
+    panel_.draw(display_, desktop_window_, width_, height_, prev_cursor_x_, prev_cursor_y_);
     background_pixmap_ = XCreatePixmap(display_, desktop_window_, width_, height_,
                                        DefaultDepth(display_, screen_));
     frame_pixmap_ = XCreatePixmap(display_, desktop_window_, width_, height_,
@@ -166,13 +173,20 @@ void WindowManager::render_frame() {
         background_.render_to_window(display_, desktop_window_, width_, height_);
     }
 
+    panel_.draw(display_, desktop_window_, width_, height_, prev_cursor_x_, prev_cursor_y_);
+
     if (rc_controller_ && rc_controller_->is_open()) {
         rc_controller_->draw(display_, desktop_window_);
     }
 
-    if (frame_pixmap_ready_) {
+    if (frame_pixmap_ == 0) {
+        frame_pixmap_ = XCreatePixmap(display_, desktop_window_, width_, height_,
+                                      DefaultDepth(display_, screen_));
+    }
+    {
         GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
-        XCopyArea(display_, desktop_window_, frame_pixmap_, gc, 0, 0, width_, height_, 0, 0);
+        XCopyArea(display_, desktop_window_, frame_pixmap_, gc,
+                  0, 0, width_, height_, 0, 0);
         XFreeGC(display_, gc);
     }
 
@@ -196,6 +210,7 @@ void WindowManager::handle_event(const XEvent& event) {
             // pixmap so subsequent restores use the resized snapshot (don't
             // include the software cursor in the pixmap).
             background_.render_to_window(display_, desktop_window_, width_, height_);
+            panel_.draw(display_, desktop_window_, width_, height_, prev_cursor_x_, prev_cursor_y_);
             if (background_pixmap_ != 0) {
                 XFreePixmap(display_, background_pixmap_);
                 background_pixmap_ = 0;
@@ -219,6 +234,10 @@ void WindowManager::handle_event(const XEvent& event) {
         }
 
         case KeyPress: {
+            if (panel_.handle_key_press(event.xkey)) {
+                render_frame();
+                break;
+            }
             KeySym key_symbol = XLookupKeysym(const_cast<XKeyEvent*>(&event.xkey), 0);
             if (key_symbol == XK_Escape) {
                 shutdown();
@@ -254,9 +273,9 @@ void WindowManager::handle_event(const XEvent& event) {
                 break;
             }
 
-            if (background_pixmap_ready_) {
+            if (frame_pixmap_ready_) {
                 GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
-                XCopyArea(display_, background_pixmap_, desktop_window_, gc,
+                XCopyArea(display_, frame_pixmap_, desktop_window_, gc,
                           prev_cursor_x_, prev_cursor_y_, cursor_w_, cursor_h_, prev_cursor_x_, prev_cursor_y_);
                 XFreeGC(display_, gc);
             }
@@ -283,10 +302,15 @@ void WindowManager::handle_event(const XEvent& event) {
                 break;
             }
 
+            if (panel_.handle_mouse_press(event.xbutton.x, event.xbutton.y, width_, height_)) {
+                render_frame();
+                break;
+            }
+
             // Restore previous cursor region before drawing click indicator
-            if (background_pixmap_ready_) {
+            if (frame_pixmap_ready_) {
                 GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
-                XCopyArea(display_, background_pixmap_, desktop_window_, gc,
+                XCopyArea(display_, frame_pixmap_, desktop_window_, gc,
                           prev_cursor_x_, prev_cursor_y_, cursor_w_, cursor_h_, prev_cursor_x_, prev_cursor_y_);
                 XFreeGC(display_, gc);
             }
@@ -303,9 +327,9 @@ void WindowManager::handle_event(const XEvent& event) {
         }
 
         case ButtonRelease:
-            if (background_pixmap_ready_) {
+            if (frame_pixmap_ready_) {
                 GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
-                XCopyArea(display_, background_pixmap_, desktop_window_, gc,
+                XCopyArea(display_, frame_pixmap_, desktop_window_, gc,
                           prev_cursor_x_, prev_cursor_y_, cursor_w_, cursor_h_, prev_cursor_x_, prev_cursor_y_);
                 XFreeGC(display_, gc);
             }

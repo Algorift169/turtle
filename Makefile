@@ -15,6 +15,14 @@ SRC_FILES := \
 	ui/bckg/src/background.cpp \
 	ui/cursor/src/cursor.cpp \
 	ui/tabs/src/w-tab.cpp \
+	ui/panel/src/panel.cpp \
+	ui/panel/src/turtle_button.cpp \
+	ui/panel/src/calendar_button.cpp \
+	ui/panel/src/browser_button.cpp \
+	ui/panel/src/calculator_button.cpp \
+	ui/panel/src/battery_button.cpp \
+	ui/panel/src/shutdown_button.cpp \
+	ui/panel/src/panel_placeholder.cpp \
 	controls/rc/src/tabs/rc1.cpp \
 	session/src/session_manager.cpp
 
@@ -23,6 +31,7 @@ INCLUDE_DIRS := \
 	ui/bckg/include \
 	ui/cursor/include \
 	ui/tabs/include \
+	ui/panel/include \
 	controls/rc/include \
 	session/include
 
