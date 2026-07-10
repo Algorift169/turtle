@@ -99,6 +99,75 @@ int battery_percent() {
     return std::max(0, std::min(100, std::stoi(value)));
 }
 
+int cpu_usage_percent() {
+    // Track previous /proc/stat values between calls to compute a delta.
+    static long prev_idle = 0;
+    static long prev_total = 0;
+
+    std::ifstream stat_file("/proc/stat");
+    if (!stat_file) {
+        return 0;
+    }
+
+    std::string label;
+    stat_file >> label;  // consume "cpu"
+    long user = 0, nice = 0, system = 0, idle = 0, iowait = 0, irq = 0, softirq = 0, steal = 0;
+    stat_file >> user >> nice >> system >> idle >> iowait >> irq >> softirq >> steal;
+
+    const long total_idle = idle + iowait;
+    const long total = user + nice + system + idle + iowait + irq + softirq + steal;
+
+    const long diff_idle = total_idle - prev_idle;
+    const long diff_total = total - prev_total;
+
+    prev_idle = total_idle;
+    prev_total = total;
+
+    if (diff_total == 0) {
+        return 0;
+    }
+    return static_cast<int>(100 * (diff_total - diff_idle) / diff_total);
+}
+
+int memory_usage_percent() {
+    std::ifstream meminfo("/proc/meminfo");
+    if (!meminfo) {
+        return 0;
+    }
+
+    long mem_total = 0;
+    long mem_available = 0;
+    std::string line;
+    while (std::getline(meminfo, line)) {
+        if (line.rfind("MemTotal:", 0) == 0) {
+            std::istringstream iss(line);
+            std::string key;
+            iss >> key >> mem_total;
+        } else if (line.rfind("MemAvailable:", 0) == 0) {
+            std::istringstream iss(line);
+            std::string key;
+            iss >> key >> mem_available;
+            break;  // MemAvailable always appears after MemTotal
+        }
+    }
+
+    if (mem_total == 0) {
+        return 0;
+    }
+    return static_cast<int>(100 * (mem_total - mem_available) / mem_total);
+}
+
+int process_count() {
+    int count = 0;
+    for (const auto& entry : std::filesystem::directory_iterator("/proc")) {
+        const std::string name = entry.path().filename().string();
+        if (!name.empty() && std::isdigit(static_cast<unsigned char>(name[0]))) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 }  // namespace
 
 bool Panel::handle_mouse_press(int x, int y, int desktop_width, int desktop_height) {
@@ -239,9 +308,24 @@ void Panel::draw(Display* display, Window window, int desktop_width, int desktop
     const std::string time_text = current_time_text();
     const int time_text_width = static_cast<int>(time_text.size() * 8);
     const int time_x = battery_x - style_.button_spacing * 4 - time_text_width;
+
+    // Build live system-stat strings.
+    const std::string cpu_text = "cpu: " + std::to_string(cpu_usage_percent()) + "%";
+    const std::string mem_text = "mem: " + std::to_string(memory_usage_percent()) + "%";
+    const std::string proc_text = "processes: " + std::to_string(process_count());
+    const int char_w = 7;  // approximate per-character width for the default X font
+    const int stat_spacing = style_.button_spacing * 2;
+    const int cpu_text_width = static_cast<int>(cpu_text.size()) * char_w;
+    const int mem_text_width = static_cast<int>(mem_text.size()) * char_w;
+    const int proc_text_width = static_cast<int>(proc_text.size()) * char_w;
+    const int stats_total_width = cpu_text_width + stat_spacing + mem_text_width + stat_spacing + proc_text_width + stat_spacing;
+
+    // Position the stats block just before the time.
+    const int stats_x = time_x - stats_total_width;
+
     const int search_x = calculator_x + style_.button_size + style_.button_spacing;
     const int placeholder_x = search_x + style_.search_width + style_.button_spacing;
-    const int placeholder_width = time_x - style_.button_spacing - placeholder_x;
+    const int placeholder_width = stats_x - style_.button_spacing - placeholder_x;
 
     const bool turtle_hover = is_hover(turtle_x, top_y, style_.button_size, style_.button_size);
     const bool calendar_hover = is_hover(calendar_x, top_y, style_.button_size, style_.button_size);
@@ -270,8 +354,23 @@ void Panel::draw(Display* display, Window window, int desktop_width, int desktop
 
     placeholder_.draw(display, window, placeholder_x, panel_y + style_.placeholder_margin, placeholder_width, panel_height - style_.placeholder_margin * 2);
 
+    // Draw live system stats: cpu | mem | processes
+    const int text_y = panel_y + panel_height / 2 + 4;
+    const unsigned long stat_label_color = 0xAAAAAAFF;  // subtle blueish-grey for labels
+    int sx = stats_x;
+
+    XSetForeground(display, gc, stat_label_color);
+    draw_text(display, window, gc, sx, text_y, cpu_text);
+    sx += cpu_text_width + stat_spacing;
+
+    draw_text(display, window, gc, sx, text_y, mem_text);
+    sx += mem_text_width + stat_spacing;
+
+    draw_text(display, window, gc, sx, text_y, proc_text);
+
+    // Draw time
     XSetForeground(display, gc, style_.text_color);
-    draw_text(display, window, gc, time_x, panel_y + panel_height / 2 + 4, time_text);
+    draw_text(display, window, gc, time_x, text_y, time_text);
 
     battery_button_.draw(display, window, battery_x, top_y, style_.button_size, style_.button_size, style_.icon_size, battery_percent(), battery_hover);
     shutdown_button_.draw(display, window, shutdown_x, top_y, style_.button_size, style_.button_size, style_.icon_size, shutdown_hover);

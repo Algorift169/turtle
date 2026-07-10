@@ -164,28 +164,37 @@ bool WindowManager::create_desktop_window() {
 }
 
 void WindowManager::render_frame() {
-    if (background_pixmap_ready_) {
-        GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
-        XCopyArea(display_, background_pixmap_, desktop_window_, gc,
-                  0, 0, width_, height_, 0, 0);
-        XFreeGC(display_, gc);
-    } else {
-        background_.render_to_window(display_, desktop_window_, width_, height_);
-    }
-
-    panel_.draw(display_, desktop_window_, width_, height_, prev_cursor_x_, prev_cursor_y_);
-
-    if (rc_controller_ && rc_controller_->is_open()) {
-        rc_controller_->draw(display_, desktop_window_);
-    }
-
+    // Double-buffer the entire frame: compose into frame_pixmap_ first, then
+    // present to the window in a single blit to avoid visible flicker (e.g.
+    // the search-bar blink caused by momentarily showing stale content).
     if (frame_pixmap_ == 0) {
         frame_pixmap_ = XCreatePixmap(display_, desktop_window_, width_, height_,
                                       DefaultDepth(display_, screen_));
     }
+
+    // Step 1: draw the wallpaper into the off-screen pixmap.
+    if (background_pixmap_ready_) {
+        GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
+        XCopyArea(display_, background_pixmap_, frame_pixmap_, gc,
+                  0, 0, width_, height_, 0, 0);
+        XFreeGC(display_, gc);
+    } else {
+        background_.render_to_window(display_, frame_pixmap_, width_, height_);
+    }
+
+    // Step 2: draw the panel into the off-screen pixmap.
+    panel_.draw(display_, frame_pixmap_, width_, height_, prev_cursor_x_, prev_cursor_y_);
+
+    // Step 3: draw the right-click menu (if any) into the off-screen pixmap.
+    if (rc_controller_ && rc_controller_->is_open()) {
+        rc_controller_->draw(display_, frame_pixmap_);
+    }
+
+    // Step 4: present the completed frame to the window in one
+    // operation, then draw the cursor overlay on top.
     {
         GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
-        XCopyArea(display_, desktop_window_, frame_pixmap_, gc,
+        XCopyArea(display_, frame_pixmap_, desktop_window_, gc,
                   0, 0, width_, height_, 0, 0);
         XFreeGC(display_, gc);
     }
