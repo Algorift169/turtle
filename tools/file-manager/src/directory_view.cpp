@@ -105,27 +105,23 @@ DirectoryView::DirectoryView(Activated on_activated, Selected on_selected)
 
     GtkTreeSelection* selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(tree_));
     gtk_tree_selection_set_mode(selection, GTK_SELECTION_SINGLE);
-    g_signal_connect(tree_, "button-press-event", G_CALLBACK(+[](GtkWidget* tree, GdkEventButton* event, gpointer data) -> gboolean {
-        if (event->button != 1) return FALSE;
+    g_signal_connect(tree_, "row-activated", G_CALLBACK(+[](GtkTreeView* tree, GtkTreePath* path, GtkTreeViewColumn*, gpointer data) {
         auto* view = static_cast<DirectoryView*>(data);
-        GtkTreePath* path = nullptr;
-        if (!gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(tree), static_cast<int>(event->x), static_cast<int>(event->y), &path, nullptr, nullptr, nullptr)) {
-            return FALSE;
-        }
         GtkTreeIter iter;
         if (!gtk_tree_model_get_iter(GTK_TREE_MODEL(view->store_), &iter, path)) {
-            gtk_tree_path_free(path);
-            return FALSE;
+            return;
         }
-        FileEntry* entry = nullptr; gtk_tree_model_get(GTK_TREE_MODEL(view->store_), &iter, Entry, &entry, -1);
+        FileEntry* entry = nullptr;
+        gtk_tree_model_get(GTK_TREE_MODEL(view->store_), &iter, Entry, &entry, -1);
         if (entry) view->on_activated_(*entry);
-        gtk_tree_path_free(path);
-        return TRUE;
     }), this);
     g_signal_connect(selection, "changed", G_CALLBACK(+[](GtkTreeSelection* selection, gpointer data) {
-        auto* view = static_cast<DirectoryView*>(data); GtkTreeModel* model = nullptr; GtkTreeIter iter;
+        auto* view = static_cast<DirectoryView*>(data);
+        GtkTreeModel* model = nullptr;
+        GtkTreeIter iter;
         if (!gtk_tree_selection_get_selected(selection, &model, &iter)) return;
-        FileEntry* entry = nullptr; gtk_tree_model_get(model, &iter, Entry, &entry, -1);
+        FileEntry* entry = nullptr;
+        gtk_tree_model_get(model, &iter, Entry, &entry, -1);
         if (entry) view->on_selected_(*entry);
     }), this);
 }
