@@ -1,6 +1,6 @@
-#include "toolbar.hpp"
+#include "../include/toolbar.hpp"
 
-#include "icon_loader.hpp"
+#include "../include/icon_loader.hpp"
 
 namespace turtle::file_manager {
 namespace {

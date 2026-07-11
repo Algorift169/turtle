@@ -1,6 +1,6 @@
 #include <gtk/gtk.h>
 
-#include "file_manager_window.hpp"
+#include "../include/file_manager_window.hpp"
 
 int main(int argc, char* argv[]) {
     gtk_init(&argc, &argv);

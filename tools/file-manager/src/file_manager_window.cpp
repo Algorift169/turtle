@@ -1,4 +1,4 @@
-#include "file_manager_window.hpp"
+#include "../include/file_manager_window.hpp"
 
 #include <string>
 
@@ -7,7 +7,7 @@
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 
-#include "icon_loader.hpp"
+#include "../include/icon_loader.hpp"
 
 namespace turtle::file_manager {
 namespace {

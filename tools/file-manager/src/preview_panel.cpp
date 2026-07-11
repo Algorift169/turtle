@@ -1,4 +1,4 @@
-#include "preview_panel.hpp"
+#include "../include/preview_panel.hpp"
 
 #include <algorithm>
 #include <array>

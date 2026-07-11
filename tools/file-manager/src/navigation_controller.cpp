@@ -1,4 +1,4 @@
-#include "navigation_controller.hpp"
+#include "../include/navigation_controller.hpp"
 
 namespace turtle::file_manager {
 

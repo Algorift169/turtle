@@ -1,9 +1,9 @@
-#include "sidebar.hpp"
+#include "../include/sidebar.hpp"
 
 #include <vector>
 
-#include "file_system.hpp"
-#include "icon_loader.hpp"
+#include "../include/file_system.hpp"
+#include "../include/icon_loader.hpp"
 
 namespace turtle::file_manager {
 namespace {
