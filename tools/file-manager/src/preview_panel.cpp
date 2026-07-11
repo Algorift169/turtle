@@ -69,9 +69,26 @@ void PreviewPanel::show_message(const char* title, const char* detail) {
 }
 
 void PreviewPanel::show_entry(const FileEntry& entry) {
-    gtk_label_set_text(GTK_LABEL(title_), entry.name.c_str()); gtk_image_clear(GTK_IMAGE(image_));
+    if (entry.path.empty()) {
+        show_message("Preview", "Select an item to inspect it.");
+        return;
+    }
+
+    gtk_label_set_text(GTK_LABEL(title_), entry.name.c_str());
+    gtk_image_clear(GTK_IMAGE(image_));
+
     if (entry.kind == EntryKind::Directory) {
-        show_message(entry.name.c_str(), "Directory\nSingle-click to open this location.");
+        std::ostringstream detail;
+        detail << "Directory\nPath: " << entry.path.string() << "\n";
+        if (std::filesystem::exists(entry.path)) {
+            std::error_code ec;
+            std::uintmax_t count = 0;
+            for (std::filesystem::directory_iterator it(entry.path, ec), end{}; it != end && !ec; it.increment(ec)) {
+                ++count;
+            }
+            detail << "Contents: " << (ec ? "unknown" : std::to_string(count)) << " entries";
+        }
+        set_detail(detail.str());
         return;
     }
 

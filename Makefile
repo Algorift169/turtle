@@ -37,7 +37,13 @@ FILE_MANAGER_SRC_FILES := \
 	tools/file-manager/src/directory_view.cpp \
 	tools/file-manager/src/preview_panel.cpp \
 	tools/file-manager/src/toolbar.cpp \
-	tools/file-manager/src/file_manager_window.cpp
+	tools/file-manager/src/file_manager_window.cpp \
+	tools/file-manager/src/file_menu.cpp \
+	tools/file-manager/src/edit_menu.cpp \
+	tools/file-manager/src/view_menu.cpp \
+	tools/file-manager/src/bookmarks_menu.cpp \
+	tools/file-manager/src/recent_menu.cpp \
+	tools/file-manager/src/help_menu.cpp
 
 INCLUDE_DIRS := \
 	ui/wm/include \

@@ -19,8 +19,8 @@ GtkWidget* tool_button(const char* tooltip, const std::string& icon, const std::
 
 Toolbar::Toolbar(Actions actions) {
     root_ = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 3); gtk_widget_set_name(root_, "toolbar"); gtk_container_set_border_width(GTK_CONTAINER(root_), 4);
-    back_ = tool_button("Back", "images/icons/go-first-rtl.png", actions.back);
-    forward_ = tool_button("Forward", "images/icons/go-first.png", actions.forward);
+    back_ = tool_button("Back", "images/icons/go-first.png", actions.back);
+    forward_ = tool_button("Forward", "images/icons/go-first-rtl.png", actions.forward);
     GtkWidget* up = tool_button("Up Directory", "images/icons/go-up.png", actions.up);
     home_ = tool_button("Home", "images/icons/home.png", actions.home);
     refresh_ = tool_button("Refresh", "images/icons/refresh.svg", actions.refresh);
