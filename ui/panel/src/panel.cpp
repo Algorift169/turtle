@@ -9,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
@@ -86,6 +87,32 @@ std::string current_time_text() {
 
 bool point_in_rect(int px, int py, int x, int y, int width, int height) {
     return px >= x && px < x + width && py >= y && py < y + height;
+}
+
+bool launch_file_manager() {
+    const std::vector<std::filesystem::path> candidates = {
+        std::filesystem::current_path() / "build" / "bin" / "turtle-file-manager",
+        std::filesystem::path("build/bin/turtle-file-manager"),
+        std::filesystem::path("/home/israfil/Desktop/turtle/build/bin/turtle-file-manager")
+    };
+
+    for (const auto& candidate : candidates) {
+        if (!std::filesystem::exists(candidate) || !std::filesystem::is_regular_file(candidate)) {
+            continue;
+        }
+
+        const pid_t pid = fork();
+        if (pid == 0) {
+            const std::string executable = candidate.string();
+            char* const argv[] = {const_cast<char*>(executable.c_str()), nullptr};
+            execv(executable.c_str(), argv);
+            _exit(127);
+        }
+
+        return pid >= 0;
+    }
+
+    return false;
 }
 
 int battery_percent() {
@@ -172,14 +199,20 @@ int process_count() {
 
 bool Panel::handle_mouse_press(int x, int y, int desktop_width, int desktop_height) {
     (void)desktop_width;
-    const int panel_y = desktop_height - style_.height;
+    const int panel_y = 0;
     const int top_y = panel_y + (style_.height - style_.button_size) / 2;
     const int turtle_x = style_.left_padding;
     const int calendar_x = turtle_x + style_.button_size + style_.button_spacing;
     const int browser_x = calendar_x + style_.button_size + style_.button_spacing;
     const int calculator_x = browser_x + style_.button_size + style_.button_spacing;
-    const int search_x = calculator_x + style_.button_size + style_.button_spacing;
+    const int file_manager_x = calculator_x + style_.button_size + style_.button_spacing;
+    const int search_x = file_manager_x + style_.button_size + style_.button_spacing;
     const int search_width = style_.search_width;
+
+    if (point_in_rect(x, y, file_manager_x, top_y, style_.button_size, style_.button_size)) {
+        launch_file_manager();
+        return true;
+    }
 
     if (point_in_rect(x, y, search_x, top_y, search_width, style_.button_size)) {
         search_focused_ = true;
@@ -281,7 +314,7 @@ void Panel::draw(Display* display, Window window, int desktop_width, int desktop
         return;
     }
 
-    const int panel_y = desktop_height - style_.height;
+    const int panel_y = 0;
     const int panel_width = desktop_width;
     const int panel_height = style_.height;
 
@@ -302,6 +335,7 @@ void Panel::draw(Display* display, Window window, int desktop_width, int desktop
     const int calendar_x = turtle_x + style_.button_size + style_.button_spacing;
     const int browser_x = calendar_x + style_.button_size + style_.button_spacing;
     const int calculator_x = browser_x + style_.button_size + style_.button_spacing;
+    const int file_manager_x = calculator_x + style_.button_size + style_.button_spacing;
 
     const int shutdown_x = desktop_width - style_.right_padding - style_.button_size;
     const int battery_x = shutdown_x - style_.button_size - style_.button_spacing * 2;
@@ -324,6 +358,8 @@ void Panel::draw(Display* display, Window window, int desktop_width, int desktop
     const int stats_x = time_x - stats_total_width;
 
     const int search_x = calculator_x + style_.button_size + style_.button_spacing;
+    const int search_height = std::max(20, style_.button_size - 10);
+    const int search_bar_y = top_y + (style_.button_size - search_height) / 2;
     const int placeholder_x = search_x + style_.search_width + style_.button_spacing;
     const int placeholder_width = stats_x - style_.button_spacing - placeholder_x;
 
@@ -331,6 +367,7 @@ void Panel::draw(Display* display, Window window, int desktop_width, int desktop
     const bool calendar_hover = is_hover(calendar_x, top_y, style_.button_size, style_.button_size);
     const bool browser_hover = is_hover(browser_x, top_y, style_.button_size, style_.button_size);
     const bool calculator_hover = is_hover(calculator_x, top_y, style_.button_size, style_.button_size);
+    const bool file_manager_hover = is_hover(file_manager_x, top_y, style_.button_size, style_.button_size);
     const bool battery_hover = is_hover(battery_x, top_y, style_.button_size, style_.button_size);
     const bool shutdown_hover = is_hover(shutdown_x, top_y, style_.button_size, style_.button_size);
 
@@ -338,19 +375,19 @@ void Panel::draw(Display* display, Window window, int desktop_width, int desktop
     calendar_button_.draw(display, window, calendar_x, top_y, style_.button_size, style_.button_size, style_.icon_size, calendar_hover);
     browser_button_.draw(display, window, browser_x, top_y, style_.button_size, style_.button_size, style_.icon_size, browser_hover);
     calculator_button_.draw(display, window, calculator_x, top_y, style_.button_size, style_.button_size, style_.icon_size, calculator_hover);
+    file_manager_button_.draw(display, window, file_manager_x, top_y, style_.button_size, style_.button_size, style_.icon_size, file_manager_hover);
 
-    const int search_bar_y = top_y;
     const unsigned long search_bg = 0x55333333;
     XSetForeground(display, gc, search_bg);
-    XFillRectangle(display, window, gc, search_x, search_bar_y, style_.search_width, style_.button_size);
+    XFillRectangle(display, window, gc, search_x, search_bar_y, style_.search_width, search_height);
     XSetForeground(display, gc, 0x88FFFFFF);
-    XDrawRectangle(display, window, gc, search_x, search_bar_y, style_.search_width, style_.button_size);
-    draw_icon(display, window, "images/icons/find.png", search_x + 6, search_bar_y + 5, style_.button_size - 10);
+    XDrawRectangle(display, window, gc, search_x, search_bar_y, style_.search_width, search_height);
+    draw_icon(display, window, "images/icons/find.png", search_x + 6, search_bar_y + 4, search_height - 10);
 
     const std::string text_to_draw = search_text_.empty() ? "Search..." : search_text_;
     const unsigned long text_color = search_text_.empty() ? 0x99FFFFFF : style_.text_color;
     XSetForeground(display, gc, text_color);
-    draw_text(display, window, gc, search_x + style_.button_size + 6, search_bar_y + style_.button_size / 2 + 4, text_to_draw);
+    draw_text(display, window, gc, search_x + style_.button_size + 6, search_bar_y + search_height / 2 + 4, text_to_draw);
 
     placeholder_.draw(display, window, placeholder_x, panel_y + style_.placeholder_margin, placeholder_width, panel_height - style_.placeholder_margin * 2);
 

@@ -1,10 +1,14 @@
 #include "../include/window_manager.hpp"
 
+#include <filesystem>
 #include <iostream>
 #include <string>
+#include <unistd.h>
+#include <vector>
 
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
+#include <Imlib2.h>
 #include "../../../controls/rc/include/rc1.hpp"
 
 namespace turtle {
@@ -31,6 +35,98 @@ namespace {
 
 void set_window_title(Display* display, Window window, const std::string& title) {
     XStoreName(display, window, title.c_str());
+}
+
+bool point_in_rect(int px, int py, int x, int y, int width, int height) {
+    return px >= x && px < x + width && py >= y && py < y + height;
+}
+
+bool launch_file_manager() {
+    const std::vector<std::filesystem::path> candidates = {
+        std::filesystem::current_path() / "build" / "bin" / "turtle-file-manager",
+        std::filesystem::path("build/bin/turtle-file-manager"),
+        std::filesystem::path("/home/israfil/Desktop/turtle/build/bin/turtle-file-manager")
+    };
+
+    for (const auto& candidate : candidates) {
+        if (!std::filesystem::exists(candidate) || !std::filesystem::is_regular_file(candidate)) {
+            continue;
+        }
+
+        const pid_t pid = fork();
+        if (pid == 0) {
+            const std::string executable = candidate.string();
+            char* const argv[] = {const_cast<char*>(executable.c_str()), nullptr};
+            execv(executable.c_str(), argv);
+            _exit(127);
+        }
+        return pid >= 0;
+    }
+
+    return false;
+}
+
+void draw_icon(Display* display, Window window, const std::string& icon_path, int x, int y, int size) {
+    if (icon_path.empty() || !std::filesystem::exists(icon_path)) {
+        return;
+    }
+
+    Imlib_Image image = imlib_load_image(icon_path.c_str());
+    if (!image) {
+        return;
+    }
+
+    imlib_context_set_display(display);
+    imlib_context_set_visual(DefaultVisual(display, DefaultScreen(display)));
+    imlib_context_set_colormap(DefaultColormap(display, DefaultScreen(display)));
+    imlib_context_set_drawable(window);
+    imlib_context_set_image(image);
+    imlib_render_image_on_drawable_at_size(x, y, size, size);
+    imlib_free_image();
+}
+
+void draw_file_manager_launcher(Display* display, Window window, int desktop_width, int desktop_height) {
+    const int button_x = 24;
+    const int button_y = 64;
+    const int button_w = 88;
+    const int button_h = 88;
+    const int icon_size = 48;
+
+    if (desktop_width <= button_x + button_w || desktop_height <= button_y + button_h) {
+        return;
+    }
+
+    GC gc = XCreateGC(display, window, 0, nullptr);
+    XSetForeground(display, gc, 0x22000000);
+    XFillRectangle(display, window, gc, button_x, button_y, button_w, button_h);
+    XSetForeground(display, gc, 0x66000000);
+    XDrawRectangle(display, window, gc, button_x, button_y, button_w, button_h);
+
+    const std::string label = "filesystem";
+    XFontStruct* font = XLoadQueryFont(display, "fixed");
+    if (font) {
+        XSetFont(display, gc, font->fid);
+        int text_width = XTextWidth(font, label.c_str(), static_cast<int>(label.size()));
+        int text_x = button_x + (button_w - text_width) / 2;
+        int text_y = button_y + button_h - 12;
+        XSetForeground(display, gc, 0xFFFFFFFF);
+        XDrawString(display, window, gc, text_x, text_y, label.c_str(), static_cast<int>(label.size()));
+        XFreeFont(display, font);
+    }
+    XFreeGC(display, gc);
+
+    const std::vector<std::filesystem::path> icon_candidates = {
+        std::filesystem::current_path() / "images" / "icons" / "file-manager.svg",
+        std::filesystem::path("images/icons/file-manager.svg"),
+        std::filesystem::path("/home/israfil/Desktop/turtle/images/icons/file-manager.svg")
+    };
+
+    for (const auto& candidate : icon_candidates) {
+        if (std::filesystem::exists(candidate)) {
+            draw_icon(display, window, candidate.string(), button_x + 20, button_y + 8, icon_size);
+            break;
+        }
+    }
 }
 
 }  // namespace
@@ -182,15 +278,18 @@ void WindowManager::render_frame() {
         background_.render_to_window(display_, frame_pixmap_, width_, height_);
     }
 
-    // Step 2: draw the panel into the off-screen pixmap.
+    // Step 2: draw the file-manager launcher button onto the desktop surface.
+    draw_file_manager_launcher(display_, frame_pixmap_, width_, height_);
+
+    // Step 3: draw the panel into the off-screen pixmap.
     panel_.draw(display_, frame_pixmap_, width_, height_, prev_cursor_x_, prev_cursor_y_);
 
-    // Step 3: draw the right-click menu (if any) into the off-screen pixmap.
+    // Step 4: draw the right-click menu (if any) into the off-screen pixmap.
     if (rc_controller_ && rc_controller_->is_open()) {
         rc_controller_->draw(display_, frame_pixmap_);
     }
 
-    // Step 4: present the completed frame to the window in one
+    // Step 5: present the completed frame to the window in one
     // operation, then draw the cursor overlay on top.
     {
         GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
@@ -307,6 +406,16 @@ void WindowManager::handle_event(const XEvent& event) {
 
             if (rc_controller_ && rc_controller_->is_open()) {
                 rc_controller_->on_click(event.xbutton.x, event.xbutton.y);
+                render_frame();
+                break;
+            }
+
+            const int launcher_x = 24;
+            const int launcher_y = 24;
+            const int launcher_w = 88;
+            const int launcher_h = 88;
+            if (event.xbutton.button == Button1 && point_in_rect(event.xbutton.x, event.xbutton.y, launcher_x, launcher_y, launcher_w, launcher_h)) {
+                launch_file_manager();
                 render_frame();
                 break;
             }

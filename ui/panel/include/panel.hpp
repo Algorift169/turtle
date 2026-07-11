@@ -10,6 +10,7 @@
 #include "calculator_button.hpp"
 #include "battery_button.hpp"
 #include "shutdown_button.hpp"
+#include "file_manager_button.hpp"
 #include "panel_placeholder.hpp"
 
 namespace turtle {
@@ -46,6 +47,7 @@ private:
     CalculatorButton calculator_button_;
     BatteryButton battery_button_;
     ShutdownButton shutdown_button_;
+    FileManagerButton file_manager_button_;
     PanelPlaceholder placeholder_;
     bool search_focused_ = false;
     std::string search_text_;
