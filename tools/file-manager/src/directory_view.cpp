@@ -17,6 +17,8 @@ std::string format_size(std::uintmax_t size, EntryKind kind) {
     return std::to_string(size / (1024 * 1024)) + " MB";
 }
 
+// (callback definitions are implemented below in the turtle::file_manager namespace)
+
 const char* type_name(EntryKind kind) {
     switch (kind) {
         case EntryKind::Directory: return "Folder";
@@ -72,6 +74,50 @@ void clear_entries(GtkListStore* store) {
 
 }  // namespace
 
+// Define the static DirectoryView callbacks in the enclosing namespace so
+// they can access private members of the class.
+void DirectoryView::row_activated_cb(GtkTreeView* /*tree*/, GtkTreePath* path, GtkTreeViewColumn* /*column*/, gpointer data) {
+    auto* view = static_cast<DirectoryView*>(data);
+    GtkTreeIter iter;
+    if (!gtk_tree_model_get_iter(GTK_TREE_MODEL(view->store_), &iter, path)) return;
+    FileEntry* entry = nullptr;
+    gtk_tree_model_get(GTK_TREE_MODEL(view->store_), &iter, Entry, &entry, -1);
+    if (entry) view->on_activated_(*entry);
+}
+
+void DirectoryView::selection_changed_cb(GtkTreeSelection* selection, gpointer data) {
+    auto* view = static_cast<DirectoryView*>(data);
+    GtkTreeModel* model = nullptr;
+    GtkTreeIter iter;
+    if (!gtk_tree_selection_get_selected(selection, &model, &iter)) return;
+    FileEntry* entry = nullptr;
+    gtk_tree_model_get(model, &iter, Entry, &entry, -1);
+    if (entry) view->on_selected_(*entry);
+}
+
+gboolean DirectoryView::button_press_cb(GtkWidget* widget, GdkEventButton* event, gpointer data) {
+    if (event->type != GDK_BUTTON_PRESS || event->button != 1) return FALSE;
+    auto* view = static_cast<DirectoryView*>(data);
+    int x = static_cast<int>(event->x);
+    int y = static_cast<int>(event->y);
+    GtkTreePath* path = nullptr;
+    GtkTreeViewColumn* column = nullptr;
+    int cell_x = 0, cell_y = 0;
+    if (!gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(widget), x, y, &path, &column, &cell_x, &cell_y)) return FALSE;
+    GtkTreeIter iter;
+    if (!gtk_tree_model_get_iter(GTK_TREE_MODEL(view->store_), &iter, path)) {
+        gtk_tree_path_free(path);
+        return FALSE;
+    }
+    FileEntry* entry = nullptr;
+    gtk_tree_model_get(GTK_TREE_MODEL(view->store_), &iter, Entry, &entry, -1);
+    gtk_tree_path_free(path);
+    if (entry && entry->kind == EntryKind::Directory) {
+        view->on_activated_(*entry);
+    }
+    return FALSE;
+}
+
 DirectoryView::DirectoryView(Activated on_activated, Selected on_selected)
     : on_activated_(std::move(on_activated)), on_selected_(std::move(on_selected)) {
     store_ = gtk_list_store_new(ColumnCount, GDK_TYPE_PIXBUF, G_TYPE_STRING, G_TYPE_STRING,
@@ -105,25 +151,10 @@ DirectoryView::DirectoryView(Activated on_activated, Selected on_selected)
 
     GtkTreeSelection* selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(tree_));
     gtk_tree_selection_set_mode(selection, GTK_SELECTION_SINGLE);
-    g_signal_connect(tree_, "row-activated", G_CALLBACK(+[](GtkTreeView* tree, GtkTreePath* path, GtkTreeViewColumn*, gpointer data) {
-        auto* view = static_cast<DirectoryView*>(data);
-        GtkTreeIter iter;
-        if (!gtk_tree_model_get_iter(GTK_TREE_MODEL(view->store_), &iter, path)) {
-            return;
-        }
-        FileEntry* entry = nullptr;
-        gtk_tree_model_get(GTK_TREE_MODEL(view->store_), &iter, Entry, &entry, -1);
-        if (entry) view->on_activated_(*entry);
-    }), this);
-    g_signal_connect(selection, "changed", G_CALLBACK(+[](GtkTreeSelection* selection, gpointer data) {
-        auto* view = static_cast<DirectoryView*>(data);
-        GtkTreeModel* model = nullptr;
-        GtkTreeIter iter;
-        if (!gtk_tree_selection_get_selected(selection, &model, &iter)) return;
-        FileEntry* entry = nullptr;
-        gtk_tree_model_get(model, &iter, Entry, &entry, -1);
-        if (entry) view->on_selected_(*entry);
-    }), this);
+    g_signal_connect(tree_, "row-activated", G_CALLBACK(DirectoryView::row_activated_cb), this);
+    g_signal_connect(selection, "changed", G_CALLBACK(DirectoryView::selection_changed_cb), this);
+
+    g_signal_connect(tree_, "button-press-event", G_CALLBACK(DirectoryView::button_press_cb), this);
 }
 
 DirectoryView::~DirectoryView() { clear_entries(store_); g_object_unref(store_); }

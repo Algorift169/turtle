@@ -102,8 +102,10 @@ void draw_file_manager_launcher(Display* display, Window window, int desktop_wid
     XSetForeground(display, gc, 0x66000000);
     XDrawRectangle(display, window, gc, button_x, button_y, button_w, button_h);
 
-    const std::string label = "filesystem";
-    XFontStruct* font = XLoadQueryFont(display, "fixed");
+    const std::string label = "File-system";
+    // Try to load a bold font; fall back to fixed if not available.
+    XFontStruct* font = XLoadQueryFont(display, "-*-helvetica-bold-r-*-*-14-*-*-*-*-*-*-*");
+    if (!font) font = XLoadQueryFont(display, "fixed");
     if (font) {
         XSetFont(display, gc, font->fid);
         int text_width = XTextWidth(font, label.c_str(), static_cast<int>(label.size()));

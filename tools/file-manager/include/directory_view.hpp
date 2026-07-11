@@ -26,6 +26,10 @@ private:
     GtkListStore* store_ = nullptr;
     Activated on_activated_;
     Selected on_selected_;
+    // Static callbacks used by GTK signal connections
+    static void row_activated_cb(GtkTreeView* tree, GtkTreePath* path, GtkTreeViewColumn* column, gpointer data);
+    static void selection_changed_cb(GtkTreeSelection* selection, gpointer data);
+    static gboolean button_press_cb(GtkWidget* widget, GdkEventButton* event, gpointer data);
 };
 
 }  // namespace turtle::file_manager
