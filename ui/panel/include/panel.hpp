@@ -23,6 +23,7 @@ public:
     void draw(Display* display, Window window, int desktop_width, int desktop_height, int cursor_x, int cursor_y) const;
     bool handle_mouse_press(int x, int y, int desktop_width, int desktop_height);
     bool handle_key_press(const XKeyEvent& event);
+    int height() const;
 
 private:
     struct Style {

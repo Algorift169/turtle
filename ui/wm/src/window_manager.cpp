@@ -85,22 +85,17 @@ void draw_icon(Display* display, Window window, const std::string& icon_path, in
     imlib_free_image();
 }
 
-void draw_file_manager_launcher(Display* display, Window window, int desktop_width, int desktop_height) {
-    const int button_x = 24;
-    const int button_y = 64;
-    const int button_w = 88;
-    const int button_h = 88;
+void draw_file_manager_launcher(Display* display, Window window, int desktop_width, int desktop_height,
+                                int button_x, int button_y, int button_w, int button_h) {
     const int icon_size = 48;
 
     if (desktop_width <= button_x + button_w || desktop_height <= button_y + button_h) {
         return;
     }
 
+    // Draw only the icon and text; avoid drawing a filled background
+    // rectangle which creates a visible black box on some visuals.
     GC gc = XCreateGC(display, window, 0, nullptr);
-    XSetForeground(display, gc, 0x22000000);
-    XFillRectangle(display, window, gc, button_x, button_y, button_w, button_h);
-    XSetForeground(display, gc, 0x66000000);
-    XDrawRectangle(display, window, gc, button_x, button_y, button_w, button_h);
 
     const std::string label = "File-system";
     // Try to load a bold font; fall back to fixed if not available.
@@ -281,7 +276,7 @@ void WindowManager::render_frame() {
     }
 
     // Step 2: draw the file-manager launcher button onto the desktop surface.
-    draw_file_manager_launcher(display_, frame_pixmap_, width_, height_);
+    draw_file_manager_launcher(display_, frame_pixmap_, width_, height_, launcher_x_, launcher_y_, launcher_w_, launcher_h_);
 
     // Step 3: draw the panel into the off-screen pixmap.
     panel_.draw(display_, frame_pixmap_, width_, height_, prev_cursor_x_, prev_cursor_y_);
@@ -305,6 +300,91 @@ void WindowManager::render_frame() {
 }
 
 void draw_cursor_only() {
+}
+
+// --- Launcher drag API implementations ---
+// Starts a drag operation for the desktop launcher. Call this when a
+// pointer press is detected over the launcher. It records the pointer
+// offset into the icon so subsequent motion can maintain the grab point.
+void WindowManager::startLauncherDrag(int pointer_x, int pointer_y) {
+    launcher_dragging_ = true;
+    launcher_drag_offset_x_ = pointer_x - launcher_x_;
+    launcher_drag_offset_y_ = pointer_y - launcher_y_;
+    launcher_initial_x_ = launcher_x_;
+    launcher_initial_y_ = launcher_y_;
+    launcher_moved_ = false;
+}
+
+// Updates launcher position during an ongoing drag. This function restores
+// only the previous launcher region and draws the launcher at the new
+// position to minimize repaint work and avoid flicker.
+void WindowManager::updateLauncherDrag(int pointer_x, int pointer_y) {
+    if (!launcher_dragging_) return;
+    int new_x = pointer_x - launcher_drag_offset_x_;
+    int new_y = pointer_y - launcher_drag_offset_y_;
+    int min_y = panel_.height();
+    if (new_y < min_y) new_y = min_y;
+    new_x = std::max(0, std::min(width_ - launcher_w_, new_x));
+    new_y = std::max(min_y, std::min(height_ - launcher_h_, new_y));
+
+    if (new_x == launcher_x_ && new_y == launcher_y_) return;
+
+    // Restore previous launcher area from the background snapshot if available
+    if (background_pixmap_ready_) {
+        GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
+        XCopyArea(display_, background_pixmap_, desktop_window_, gc,
+                  launcher_x_, launcher_y_, launcher_w_, launcher_h_, launcher_x_, launcher_y_);
+        XFreeGC(display_, gc);
+    } else {
+        background_.render_to_window(display_, desktop_window_, width_, height_);
+        panel_.draw(display_, desktop_window_, width_, height_, prev_cursor_x_, prev_cursor_y_);
+    }
+
+    // Draw the launcher at the new location directly to the desktop window
+    draw_file_manager_launcher(display_, desktop_window_, width_, height_, new_x, new_y, launcher_w_, launcher_h_);
+
+    const int dx0 = new_x - launcher_initial_x_;
+    const int dy0 = new_y - launcher_initial_y_;
+    if (dx0 * dx0 + dy0 * dy0 > 16) launcher_moved_ = true;
+
+    launcher_x_ = new_x;
+    launcher_y_ = new_y;
+}
+
+// Finishes a launcher drag; if the launcher was not moved then this
+// returns true to indicate the launcher should be activated (a click).
+bool WindowManager::finishLauncherDrag(int pointer_x, int pointer_y) {
+    if (!launcher_dragging_) return false;
+    launcher_dragging_ = false;
+    bool activate = !launcher_moved_;
+    // Finalize by re-rendering the full frame to update the off-screen
+    // buffers and ensure consistent state.
+    render_frame();
+    if (activate) launch_file_manager();
+    return activate;
+}
+
+bool WindowManager::isPointOverDesktopIcon(int x, int y) const {
+    // Helper: detect whether a desktop coordinate lies over any desktop icon.
+    // Current implementation checks only the single file-manager launcher
+    // rectangle (`launcher_x_..launcher_x_+launcher_w_`,
+    // `launcher_y_..launcher_y_+launcher_h_`).
+    //
+    // Usage for future tools/components:
+    // - Call this from `ButtonPress`/`ButtonRelease`/`MotionNotify` handlers
+    //   to decide whether the WM should consume pointer events (for
+    //   example, to prevent opening the workspace tab `w-tab` when the user
+    //   right-clicks on a desktop icon).
+    // - If additional desktop icons are added, extend this function to
+    //   check their rectangles (or a maintained vector of icon bounds).
+    // - Example: in `handle_event` when seeing `ButtonPress` with
+    //   `event.xbutton.button == Button3`, call `isPointOverDesktopIcon(x,y)`
+    //   and return/consume the event if true so other UI modules are not
+    //   invoked.
+    // - Keep this function cheap: it should not perform heavy lookups or
+    //   allocate memory; it will be called frequently for event filtering.
+
+    return point_in_rect(x, y, launcher_x_, launcher_y_, launcher_w_, launcher_h_);
 }
 
 void WindowManager::handle_event(const XEvent& event) {
@@ -389,6 +469,18 @@ void WindowManager::handle_event(const XEvent& event) {
                           prev_cursor_x_, prev_cursor_y_, cursor_w_, cursor_h_, prev_cursor_x_, prev_cursor_y_);
                 XFreeGC(display_, gc);
             }
+            // If the launcher is being dragged, update its position and redraw
+            // only the affected region to avoid full-frame flicker.
+            if (launcher_dragging_) {
+                updateLauncherDrag(nx, ny);
+                cursor_.set_position(nx, ny);
+                cursor_.draw_overlay();
+                XFlush(display_);
+                prev_cursor_x_ = nx;
+                prev_cursor_y_ = ny;
+                break;
+            }
+
             cursor_.set_position(nx, ny);
             cursor_.draw_overlay();
             XFlush(display_);
@@ -399,6 +491,16 @@ void WindowManager::handle_event(const XEvent& event) {
 
         case ButtonPress: {
             if (event.xbutton.button == Button3) {
+                // If the right-click happened over a desktop icon, consume it
+                // here so other UI components (for example `w-tab`) do not
+                // receive the event.
+                if (isPointOverDesktopIcon(event.xbutton.x, event.xbutton.y)) {
+                    // Consume the right-click over desktop icons and do not
+                    // dispatch to other UI components (avoids opening w-tab).
+                    render_frame();
+                    break;
+                }
+                // otherwise let the normal right-click flow proceed
                 if (rc_controller_) {
                     rc_controller_->on_right_click(event.xbutton.x, event.xbutton.y);
                 }
@@ -412,13 +514,9 @@ void WindowManager::handle_event(const XEvent& event) {
                 break;
             }
 
-            const int launcher_x = 24;
-            const int launcher_y = 24;
-            const int launcher_w = 88;
-            const int launcher_h = 88;
-            if (event.xbutton.button == Button1 && point_in_rect(event.xbutton.x, event.xbutton.y, launcher_x, launcher_y, launcher_w, launcher_h)) {
-                launch_file_manager();
-                render_frame();
+            if (event.xbutton.button == Button1 && point_in_rect(event.xbutton.x, event.xbutton.y, launcher_x_, launcher_y_, launcher_w_, launcher_h_)) {
+                // begin dragging using the reusable API
+                startLauncherDrag(event.xbutton.x, event.xbutton.y);
                 break;
             }
 
@@ -447,6 +545,9 @@ void WindowManager::handle_event(const XEvent& event) {
         }
 
         case ButtonRelease:
+            if (launcher_dragging_) {
+                finishLauncherDrag(event.xbutton.x, event.xbutton.y);
+            }
             if (frame_pixmap_ready_) {
                 GC gc = XCreateGC(display_, desktop_window_, 0, nullptr);
                 XCopyArea(display_, frame_pixmap_, desktop_window_, gc,

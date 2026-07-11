@@ -197,6 +197,10 @@ int process_count() {
 
 }  // namespace
 
+int Panel::height() const {
+    return style_.height;
+}
+
 bool Panel::handle_mouse_press(int x, int y, int desktop_width, int desktop_height) {
     (void)desktop_width;
     const int panel_y = 0;
